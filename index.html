@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Violin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap');
+
+        :root {
+            --wood-dark: #3e2723;
+            --wood-light: #5d4037;
+            --wood-varnish: #8d6e63;
+            --string-color: #c0c0c0;
+            --fingerboard: #1a1a1a;
+        }
+
+        body {
+            background: radial-gradient(circle at center, #2c1e1a 0%, #0f0a08 100%);
+            font-family: 'Lato', sans-serif;
+            overflow: hidden;
+            touch-action: none; /* Prevent scrolling on mobile */
+        }
+
+        .wood-texture {
+            background-color: var(--wood-varnish);
+            background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%233e2723' fill-opacity='0.1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E");
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.8);
+        }
+
+        /* String vibration animation */
+        @keyframes vibrate {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-1px); }
+            75% { transform: translateX(1px); }
+            100% { transform: translateX(0); }
+        }
+
+        .string.playing {
+            animation: vibrate 0.05s infinite;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+            background-color: #fff;
+        }
+
+        .fingerboard-shadow {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        .marker {
+            pointer-events: none;
+        }
+
+        /* Tutorial Target Indicator */
+        .tutorial-target {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: radial-gradient(circle, #4ade80 0%, transparent 70%);
+            border: 2px solid #4ade80;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 50;
+            animation: pulse-target 1.5s infinite;
+            box-shadow: 0 0 15px #4ade80;
+        }
+
+        @keyframes pulse-target {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.4; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+        }
+
+        .tutorial-text {
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center text-white">
+
+    <!-- Start Overlay -->
+    <div id="start-overlay" class="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center cursor-pointer transition-opacity duration-500">
+        <h1 class="font-['Cinzel'] text-5xl md:text-7xl text-amber-500 mb-4">Virtual Violin</h1>
+        <p class="text-gray-300 text-xl mb-8 text-center px-4">Click or Tap anywhere to pick up the bow</p>
+        <div class="animate-bounce text-amber-500 text-3xl">
+            &#9660;
+        </div>
+    </div>
+
+    <!-- UI Header -->
+    <div class="absolute top-4 left-0 right-0 flex justify-between px-6 pointer-events-none z-20 items-start">
+        <div>
+            <h2 class="font-['Cinzel'] text-amber-500 text-xl">Diksha</h2>
+        </div>
+        <div class="pointer-events-auto flex flex-col gap-2 items-end">
+            <button id="toggle-markers" class="bg-stone-800 hover:bg-stone-700 border border-stone-600 text-xs px-3 py-1 rounded text-stone-300 transition">
+                Toggle Tapes
+            </button>
+            <button id="start-tutorial" class="bg-amber-700 hover:bg-amber-600 border border-amber-500 text-xs px-3 py-1 rounded text-white transition shadow-lg font-bold">
+                Learn: Twinkle Twinkle
+            </button>
+        </div>
+    </div>
+
+    <!-- Tutorial Status Bar -->
+    <div id="tutorial-status" class="hidden absolute top-20 left-0 right-0 z-20 text-center pointer-events-none">
+        <div class="inline-block bg-black/60 backdrop-blur-md px-6 py-2 rounded-full border border-amber-500/30">
+            <span id="tutorial-msg" class="text-amber-400 font-bold text-lg tutorial-text">Prepare to Play...</span>
+        </div>
+    </div>
+
+    <!-- Main Violin Container -->
+    <div class="relative h-[90vh] w-full max-w-md wood-texture rounded-3xl border-4 border-[#2a1b15] shadow-2xl flex flex-col items-center overflow-hidden select-none">
+        
+        <!-- Scroll Head (Visual only) -->
+        <div class="w-full h-24 bg-[#2a1b15] flex justify-center items-end pb-2 relative shadow-lg z-10">
+            <div class="w-32 h-4 bg-black rounded-full opacity-50 blur-sm"></div>
+            <!-- Tuning Pegs Visuals -->
+            <div class="absolute left-4 top-6 w-8 h-12 bg-[#1a1a1a] rounded-l-lg"></div>
+            <div class="absolute right-4 top-6 w-8 h-12 bg-[#1a1a1a] rounded-r-lg"></div>
+            <div class="absolute left-4 top-16 w-8 h-12 bg-[#1a1a1a] rounded-l-lg"></div>
+            <div class="absolute right-4 top-16 w-8 h-12 bg-[#1a1a1a] rounded-r-lg"></div>
+        </div>
+
+        <!-- Fingerboard -->
+        <div class="relative flex-grow w-3/5 bg-black fingerboard-shadow flex justify-between px-[8%] py-0 overflow-hidden" id="fingerboard">
+            
+            <!-- Tutorial Target Dot (Dynamically Placed) -->
+            <div id="tutorial-dot" class="tutorial-target hidden"></div>
+
+            <!-- Fret Markers (Tapes) - Visual Guides -->
+            <div id="markers-container" class="absolute inset-0 opacity-30 pointer-events-none">
+                <div class="marker w-full h-[2px] bg-blue-400 absolute top-[11.1%]"></div> <!-- 1st Finger (Tone) -->
+                <div class="marker w-full h-[2px] bg-yellow-400 absolute top-[22.2%]"></div> <!-- 2nd Finger -->
+                <div class="marker w-full h-[2px] bg-red-400 absolute top-[27.7%]"></div> <!-- 3rd Finger -->
+                <div class="marker w-full h-[2px] bg-green-400 absolute top-[38.8%]"></div> <!-- 4th Finger -->
+            </div>
+
+            <!-- Strings -->
+            <!-- G String (Thickest) -->
+            <div class="string relative h-full w-2 bg-gray-400 opacity-80 rounded-full cursor-pointer transition-colors" 
+                 data-note="G3" data-base-freq="196.00" id="string-g">
+                 <div class="absolute inset-0 w-full h-full hover:bg-white/10"></div>
+            </div>
+
+            <!-- D String -->
+            <div class="string relative h-full w-[6px] bg-gray-400 opacity-80 rounded-full cursor-pointer transition-colors" 
+                 data-note="D4" data-base-freq="293.66" id="string-d">
+                 <div class="absolute inset-0 w-full h-full hover:bg-white/10"></div>
+            </div>
+
+            <!-- A String -->
+            <div class="string relative h-full w-1 bg-gray-400 opacity-80 rounded-full cursor-pointer transition-colors" 
+                 data-note="A4" data-base-freq="440.00" id="string-a">
+                 <div class="absolute inset-0 w-full h-full hover:bg-white/10"></div>
+            </div>
+
+            <!-- E String (Thinnest) -->
+            <div class="string relative h-full w-[2px] bg-gray-300 opacity-90 rounded-full cursor-pointer transition-colors" 
+                 data-note="E5" data-base-freq="659.25" id="string-e">
+                 <div class="absolute inset-0 w-full h-full hover:bg-white/10"></div>
+            </div>
+
+        </div>
+
+        <!-- Bridge -->
+        <div class="w-4/5 h-16 bg-[#e6d6aa] rounded-t-[40%] border-t-4 border-[#d4c490] shadow-lg z-10 mt-[-10px] flex justify-between px-[18%] items-end pb-4">
+             <div class="w-1 h-1 bg-black rounded-full opacity-50"></div>
+             <div class="w-1 h-1 bg-black rounded-full opacity-50"></div>
+             <div class="w-1 h-1 bg-black rounded-full opacity-50"></div>
+             <div class="w-1 h-1 bg-black rounded-full opacity-50"></div>
+        </div>
+
+        <!-- Tailpiece -->
+        <div class="w-2/5 h-32 bg-black rounded-b-3xl mt-[-5px] shadow-xl flex flex-col items-center pt-4 opacity-95">
+             <div class="w-2 h-2 bg-gold rounded-full mb-2"></div>
+        </div>
+
+    </div>
+
+    <div class="absolute bottom-4 text-stone-500 text-sm pointer-events-none text-center px-4">
+        Hold & slide on strings to play.<br>Higher up (top) = Open String.
+    </div>
+
+    <script>
+        // --- Audio Engine ---
+        let audioCtx;
+        let isAudioStarted = false;
+        const activeVoices = {};
+
+        async function createReverb() {
+            const sampleRate = audioCtx.sampleRate;
+            const length = 2.5 * sampleRate; 
+            const impulse = audioCtx.createBuffer(2, length, sampleRate);
+            const left = impulse.getChannelData(0);
+            const right = impulse.getChannelData(1);
+            for (let i = 0; i < length; i++) {
+                const decay = Math.pow(1 - i / length, 2);
+                left[i] = (Math.random() * 2 - 1) * decay;
+                right[i] = (Math.random() * 2 - 1) * decay;
+            }
+            const convolver = audioCtx.createConvolver();
+            convolver.buffer = impulse;
+            return convolver;
+        }
+
+        let mainGain;
+        let reverbNode;
+
+        async function initAudio() {
+            if (isAudioStarted) return;
+            
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            mainGain = audioCtx.createGain();
+            mainGain.gain.value = 0.6;
+            reverbNode = await createReverb();
+            const reverbGain = audioCtx.createGain();
+            reverbGain.gain.value = 0.4; 
+
+            mainGain.connect(audioCtx.destination);
+            mainGain.connect(reverbNode);
+            reverbNode.connect(audioCtx.destination);
+
+            isAudioStarted = true;
+            document.getElementById('start-overlay').style.opacity = '0';
+            setTimeout(() => document.getElementById('start-overlay').remove(), 500);
+        }
+
+        // --- Violin Voice Class ---
+        class ViolinVoice {
+            constructor(baseFreq) {
+                this.baseFreq = baseFreq;
+                this.osc = audioCtx.createOscillator();
+                this.gain = audioCtx.createGain();
+                this.filter = audioCtx.createBiquadFilter();
+                this.lfo = audioCtx.createOscillator();
+                this.lfoGain = audioCtx.createGain();
+
+                this.osc.type = 'sawtooth'; 
+                this.filter.type = 'lowpass';
+                this.filter.frequency.value = 2500;
+                this.filter.Q.value = 1;
+                this.lfo.frequency.value = 6; 
+                this.lfoGain.gain.value = 0; 
+
+                this.lfo.connect(this.lfoGain);
+                this.lfoGain.connect(this.osc.frequency); 
+                this.osc.connect(this.filter);
+                this.filter.connect(this.gain);
+                this.gain.connect(mainGain);
+                this.gain.gain.value = 0;
+                
+                this.osc.start();
+                this.lfo.start();
+            }
+
+            play(freqRatio) {
+                const targetFreq = this.baseFreq * freqRatio;
+                this.osc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.02);
+                const vibratoAmount = freqRatio > 1.05 ? (targetFreq * 0.015) : 0;
+                this.lfoGain.gain.setTargetAtTime(vibratoAmount, audioCtx.currentTime, 0.1);
+                this.gain.gain.cancelScheduledValues(audioCtx.currentTime);
+                this.gain.gain.setTargetAtTime(0.8, audioCtx.currentTime, 0.05);
+            }
+
+            stop() {
+                this.gain.gain.cancelScheduledValues(audioCtx.currentTime);
+                this.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.2);
+            }
+        }
+
+        // --- Tutorial Engine ---
+        const songTwinkle = [
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-a', semitones: 2, name: "1st Finger A (B)" }, // B
+            { string: 'string-a', semitones: 2, name: "1st Finger A (B)" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            
+            { string: 'string-d', semitones: 5, name: "3rd Finger D (G)" }, // G
+            { string: 'string-d', semitones: 5, name: "3rd Finger D (G)" },
+            { string: 'string-d', semitones: 4, name: "2nd Finger D (F#)" }, // F#
+            { string: 'string-d', semitones: 4, name: "2nd Finger D (F#)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger D (E)" }, // E
+            { string: 'string-d', semitones: 2, name: "1st Finger D (E)" },
+            { string: 'string-d', semitones: 0, name: "Open D" }
+        ];
+
+        let tutorialActive = false;
+        let currentStep = 0;
+        let stepCompleted = false;
+
+        const tutorialDot = document.getElementById('tutorial-dot');
+        const tutorialStatus = document.getElementById('tutorial-status');
+        const tutorialMsg = document.getElementById('tutorial-msg');
+
+        function startTutorial() {
+            if (!isAudioStarted) initAudio();
+            tutorialActive = true;
+            currentStep = 0;
+            stepCompleted = false;
+            tutorialStatus.classList.remove('hidden');
+            showStep();
+        }
+
+        function showStep() {
+            if (currentStep >= songTwinkle.length) {
+                tutorialMsg.innerText = "Song Complete! Great job!";
+                tutorialDot.classList.add('hidden');
+                setTimeout(() => {
+                    tutorialActive = false;
+                    tutorialStatus.classList.add('hidden');
+                }, 3000);
+                return;
+            }
+
+            const note = songTwinkle[currentStep];
+            tutorialMsg.innerText = `${note.name}`;
+            stepCompleted = false;
+
+            // Position Dot
+            const stringEl = document.getElementById(note.string);
+            const fingerboard = document.getElementById('fingerboard');
+            const fbRect = fingerboard.getBoundingClientRect();
+            const strRect = stringEl.getBoundingClientRect();
+
+            // Calculate position based on semitones
+            // Map: 0 semitones = top (0%). 18 semitones = bottom (100%).
+            // Note: visual placement might need tweak to match exact fingerboard mapping
+            const percentage = note.semitones / 18; 
+            
+            // Logic for visual position:
+            // X: Center of the string
+            const x = (strRect.left + strRect.width/2) - fbRect.left;
+            // Y: 
+            let yPercent = percentage * 100;
+            if (note.semitones === 0) yPercent = 2; // Just visual top for open string
+
+            tutorialDot.style.left = x + 'px';
+            tutorialDot.style.top = yPercent + '%';
+            tutorialDot.classList.remove('hidden');
+            tutorialDot.style.borderColor = '#4ade80'; // Reset color
+        }
+
+        function checkTutorialHit(stringId, playedSemitones) {
+            if (!tutorialActive || stepCompleted) return;
+
+            const target = songTwinkle[currentStep];
+            
+            // Check String
+            if (stringId !== target.string) return;
+
+            // Check Pitch (Tolerance +/- 0.5 semitone)
+            // Open string is special case, must be near top
+            const tolerance = 0.7;
+            
+            // Adjust calculation to match input logic
+            if (Math.abs(playedSemitones - target.semitones) < tolerance) {
+                // Success!
+                stepCompleted = true;
+                tutorialMsg.innerText = "Good!";
+                tutorialMsg.style.color = "#fff";
+                tutorialDot.style.borderColor = "#fff";
+                
+                // Auto advance
+                setTimeout(() => {
+                    currentStep++;
+                    tutorialMsg.style.color = ""; // Reset text color
+                    showStep();
+                }, 500); // Short delay between notes
+            }
+        }
+
+        // --- Input Handling ---
+        const strings = document.querySelectorAll('.string');
+        const voices = {};
+
+        function getPitchInfo(y, height) {
+            const relativeY = y;
+            
+            if (relativeY < 15) return { ratio: 1.0, semitones: 0 };
+            
+            const percent = relativeY / height;
+            const semitones = percent * 18; 
+            return {
+                ratio: Math.pow(2, semitones / 12),
+                semitones: semitones
+            };
+        }
+
+        function handleInput(e, stringEl, isStop = false) {
+            if (!isAudioStarted) return;
+
+            const stringId = stringEl.id;
+            const baseFreq = parseFloat(stringEl.dataset.baseFreq);
+            
+            if (isStop) {
+                if (voices[stringId]) {
+                    voices[stringId].stop();
+                    stringEl.classList.remove('playing');
+                }
+                return;
+            }
+
+            if (!voices[stringId]) {
+                voices[stringId] = new ViolinVoice(baseFreq);
+            }
+
+            const rect = stringEl.getBoundingClientRect();
+            let clientY;
+            if (e.type.includes('touch')) {
+                clientY = e.touches[0].clientY;
+            } else {
+                clientY = e.clientY;
+            }
+            
+            const y = clientY - rect.top;
+            const pitchInfo = getPitchInfo(y, rect.height);
+
+            voices[stringId].play(pitchInfo.ratio);
+            stringEl.classList.add('playing');
+
+            // Check Tutorial
+            checkTutorialHit(stringId, pitchInfo.semitones);
+        }
+
+        // --- Event Listeners ---
+
+        document.getElementById('start-overlay').addEventListener('click', initAudio);
+        document.getElementById('start-tutorial').addEventListener('click', startTutorial);
+
+        strings.forEach(str => {
+            str.addEventListener('mousedown', (e) => {
+                handleInput(e, str);
+                const moveHandler = (ev) => handleInput(ev, str);
+                const upHandler = () => {
+                    handleInput(null, str, true);
+                    window.removeEventListener('mousemove', moveHandler);
+                    window.removeEventListener('mouseup', upHandler);
+                };
+                window.addEventListener('mousemove', moveHandler);
+                window.addEventListener('mouseup', upHandler);
+            });
+
+            str.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handleInput(e, str);
+            });
+            
+            str.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                handleInput(e, str);
+            });
+
+            str.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handleInput(e, str, true);
+            });
+        });
+
+        const toggleBtn = document.getElementById('toggle-markers');
+        const markersContainer = document.getElementById('markers-container');
+        toggleBtn.addEventListener('click', () => {
+            if (markersContainer.style.display === 'none') {
+                markersContainer.style.display = 'block';
+                toggleBtn.innerText = 'Hide Tapes';
+            } else {
+                markersContainer.style.display = 'none';
+                toggleBtn.innerText = 'Show Tapes';
+            }
+        });
+        
+        toggleBtn.innerText = 'Hide Tapes';
+
+    </script>
+</body>
+</html>
