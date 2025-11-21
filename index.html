@@ -133,9 +133,20 @@
             <button id="toggle-markers" class="bg-stone-800 hover:bg-stone-700 border border-stone-600 text-xs px-3 py-1 rounded text-stone-300 transition">
                 Toggle Tapes
             </button>
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-wrap justify-end">
+                 <!-- Stop Button (Initially Hidden) -->
+                <button id="stop-btn" class="hidden bg-red-600 hover:bg-red-700 border border-red-400 text-xs px-3 py-1 rounded text-white transition shadow-lg font-bold flex items-center gap-1">
+                    <span>&#9632;</span> Stop
+                </button>
+                
                 <button id="play-twinkle" class="bg-stone-800 hover:bg-stone-700 border border-stone-500 text-xs px-3 py-1 rounded text-white transition shadow-lg">
                     Twinkle Twinkle
+                </button>
+                <button id="play-taqdeer" class="bg-stone-900 hover:bg-stone-800 border border-stone-500 text-xs px-3 py-1 rounded text-amber-500 transition shadow-lg font-bold">
+                    Taqdeer Theme
+                </button>
+                <button id="play-manwa" class="bg-stone-900 hover:bg-stone-800 border border-stone-500 text-xs px-3 py-1 rounded text-rose-400 transition shadow-lg font-bold">
+                    Manwa Laage
                 </button>
                 <button id="open-ai-modal" class="bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 border border-purple-500 text-xs px-3 py-1 rounded text-white transition shadow-lg font-bold flex items-center gap-1">
                     Ask Maestro ✨
@@ -172,10 +183,10 @@
 
             <!-- Fret Markers (Tapes) - Visual Guides -->
             <div id="markers-container" class="absolute inset-0 opacity-30 pointer-events-none">
-                <div class="marker w-full h-[2px] bg-blue-400 absolute top-[11.1%]"></div> <!-- 1st Finger (Tone) -->
-                <div class="marker w-full h-[2px] bg-yellow-400 absolute top-[22.2%]"></div> <!-- 2nd Finger -->
-                <div class="marker w-full h-[2px] bg-red-400 absolute top-[27.7%]"></div> <!-- 3rd Finger -->
-                <div class="marker w-full h-[2px] bg-green-400 absolute top-[38.8%]"></div> <!-- 4th Finger -->
+                <div class="marker w-full h-[2px] bg-blue-400 absolute top-[14.2%]"></div> <!-- 1st Finger (Tone) -->
+                <div class="marker w-full h-[2px] bg-yellow-400 absolute top-[28.5%]"></div> <!-- 2nd Finger -->
+                <div class="marker w-full h-[2px] bg-red-400 absolute top-[35.7%]"></div> <!-- 3rd Finger -->
+                <div class="marker w-full h-[2px] bg-green-400 absolute top-[50%]"></div> <!-- 4th Finger -->
             </div>
 
             <!-- Strings -->
@@ -232,14 +243,15 @@
         let isAudioStarted = false;
         const activeVoices = {};
 
+        // Improved Reverb for warmer hall sound
         async function createReverb() {
             const sampleRate = audioCtx.sampleRate;
-            const length = 2.5 * sampleRate; 
+            const length = 2.0 * sampleRate; 
             const impulse = audioCtx.createBuffer(2, length, sampleRate);
             const left = impulse.getChannelData(0);
             const right = impulse.getChannelData(1);
             for (let i = 0; i < length; i++) {
-                const decay = Math.pow(1 - i / length, 2);
+                const decay = Math.pow(1 - i / length, 2.5); // Steeper decay for cleaner tail
                 left[i] = (Math.random() * 2 - 1) * decay;
                 right[i] = (Math.random() * 2 - 1) * decay;
             }
@@ -256,13 +268,27 @@
             
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioContext();
+            
+            // Master Compressor to glue sound together
+            const compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.value = -24;
+            compressor.knee.value = 30;
+            compressor.ratio.value = 12;
+            compressor.attack.value = 0.003;
+            compressor.release.value = 0.25;
+
             mainGain = audioCtx.createGain();
-            mainGain.gain.value = 0.6;
+            mainGain.gain.value = 0.5; // Lower master slightly to prevent clipping with 2 oscs
+            
             reverbNode = await createReverb();
             const reverbGain = audioCtx.createGain();
-            reverbGain.gain.value = 0.4; 
+            reverbGain.gain.value = 0.35; 
 
-            mainGain.connect(audioCtx.destination);
+            // Routing: MainGain -> Compressor -> Destination
+            //          MainGain -> Reverb -> Destination
+            mainGain.connect(compressor);
+            compressor.connect(audioCtx.destination);
+            
             mainGain.connect(reverbNode);
             reverbNode.connect(audioCtx.destination);
 
@@ -271,46 +297,80 @@
             setTimeout(() => document.getElementById('start-overlay').remove(), 500);
         }
 
-        // --- Violin Voice Class ---
+        // --- Improved Violin Voice Class ---
         class ViolinVoice {
             constructor(baseFreq) {
                 this.baseFreq = baseFreq;
-                this.osc = audioCtx.createOscillator();
+                
+                // Audio Graph:
+                // LFO -> Osc1 Freq & Osc2 Freq
+                // Osc1 & Osc2 -> Filter -> Gain -> Output
+                
+                this.osc1 = audioCtx.createOscillator();
+                this.osc2 = audioCtx.createOscillator(); // Second oscillator for thickness
+                
                 this.gain = audioCtx.createGain();
                 this.filter = audioCtx.createBiquadFilter();
+                
                 this.lfo = audioCtx.createOscillator();
                 this.lfoGain = audioCtx.createGain();
 
-                this.osc.type = 'sawtooth'; 
+                // Synthesis Settings
+                this.osc1.type = 'sawtooth'; 
+                this.osc2.type = 'sawtooth';
+                
+                // Detune Osc2 slightly for "Chorus" effect (The secret to non-electronic sound)
+                this.osc2.detune.value = 6; // 6 cents sharp
+
+                // Filter settings to cut harshness and emulate wood body resonance
                 this.filter.type = 'lowpass';
-                this.filter.frequency.value = 2500;
-                this.filter.Q.value = 1;
-                this.lfo.frequency.value = 6; 
+                this.filter.frequency.value = 2200; // Lower cutoff for warmer sound
+                this.filter.Q.value = 2.5; // Higher resonance to mimic wood formant
+
+                // Vibrato (LFO)
+                this.lfo.frequency.value = 6.5; // Faster, violin-like vibrato
                 this.lfoGain.gain.value = 0; 
 
+                // Connections
                 this.lfo.connect(this.lfoGain);
-                this.lfoGain.connect(this.osc.frequency); 
-                this.osc.connect(this.filter);
+                this.lfoGain.connect(this.osc1.frequency); 
+                this.lfoGain.connect(this.osc2.frequency);
+                
+                this.osc1.connect(this.filter);
+                this.osc2.connect(this.filter); // Mix both into filter
+                
                 this.filter.connect(this.gain);
                 this.gain.connect(mainGain);
+                
                 this.gain.gain.value = 0;
                 
-                this.osc.start();
+                this.osc1.start();
+                this.osc2.start();
                 this.lfo.start();
             }
 
             play(freqRatio) {
                 const targetFreq = this.baseFreq * freqRatio;
-                this.osc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.02);
-                const vibratoAmount = freqRatio > 1.05 ? (targetFreq * 0.015) : 0;
-                this.lfoGain.gain.setTargetAtTime(vibratoAmount, audioCtx.currentTime, 0.1);
-                this.gain.gain.cancelScheduledValues(audioCtx.currentTime);
-                this.gain.gain.setTargetAtTime(0.8, audioCtx.currentTime, 0.05);
+                
+                // Smooth pitch change (glissando)
+                const time = audioCtx.currentTime;
+                this.osc1.frequency.setTargetAtTime(targetFreq, time, 0.02);
+                this.osc2.frequency.setTargetAtTime(targetFreq, time, 0.02);
+                
+                // Vibrato logic (deeper vibrato on higher positions)
+                const vibratoAmount = freqRatio > 1.05 ? (targetFreq * 0.02) : 0;
+                this.lfoGain.gain.setTargetAtTime(vibratoAmount, time, 0.1);
+
+                // Smoother Bow Attack
+                this.gain.gain.cancelScheduledValues(time);
+                this.gain.gain.setTargetAtTime(0.7, time, 0.1); // Slower attack (0.1s) removes "click"
             }
 
             stop() {
-                this.gain.gain.cancelScheduledValues(audioCtx.currentTime);
-                this.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.2);
+                // Bow Release
+                const time = audioCtx.currentTime;
+                this.gain.gain.cancelScheduledValues(time);
+                this.gain.gain.setTargetAtTime(0, time, 0.15); // Longer release tail
             }
         }
 
@@ -332,33 +392,101 @@
             { string: 'string-d', semitones: 0, name: "Open D" }
         ];
 
+        const taqdeerData = [
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd Finger (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-g', semitones: 2, name: "1st Finger G (A)" },
+            { string: 'string-g', semitones: 6, name: "3rd Finger+ (C#)" },
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd Finger (F)" },
+            { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd Finger (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 0, name: "Open D" }
+        ];
+
+        const manwaData = [
+            // Manwa laage..
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            // Manwa laage..
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 2, name: "1st Finger (E)" },
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            // Laage re sanware
+            { string: 'string-d', semitones: 0, name: "Open D" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            // Le tera chalu...
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-a', semitones: 1, name: "Low 1st (Bb)" }, 
+            { string: 'string-a', semitones: 0, name: "Open A" },
+            { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
+            { string: 'string-d', semitones: 3, name: "Low 2nd (F)" },
+            { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
+            { string: 'string-a', semitones: 0, name: "Open A" }
+        ];
+
         let currentSongData = twinkleData;
         let tutorialActive = false;
         let isDemoPlaying = false;
         let currentStep = 0;
         let stepCompleted = false;
+        
+        // Global ID to track song sessions to prevent overlaps
+        let activeSessionId = 0;
 
         const tutorialDot = document.getElementById('tutorial-dot');
         const tutorialStatus = document.getElementById('tutorial-status');
         const tutorialMsg = document.getElementById('tutorial-msg');
+        const stopBtn = document.getElementById('stop-btn');
 
-        async function playDemo(data) {
+        function stopTutorial() {
+            // Increment session ID to invalidate any pending async loops
+            activeSessionId++;
+            
+            tutorialActive = false;
+            isDemoPlaying = false;
+            stepCompleted = false;
+            
+            // Stop all active voices
+            Object.values(voices).forEach(v => v.stop());
+            
+            // Reset UI visuals
+            document.querySelectorAll('.string').forEach(s => s.classList.remove('playing'));
+            tutorialDot.classList.add('hidden');
+            tutorialStatus.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+        }
+
+        async function playDemo(data, sessionId) {
             isDemoPlaying = true;
             tutorialMsg.innerText = "Listen first...";
             tutorialStatus.classList.remove('hidden');
+            stopBtn.classList.remove('hidden');
             
             for (const note of data) {
-                if (!tutorialActive) {
-                    isDemoPlaying = false;
-                    return;
-                }
+                // Check if we should abort because another song started or stop was clicked
+                if (sessionId !== activeSessionId) return;
 
                 // 1. Visuals - Calculate position
                 const stringEl = document.getElementById(note.string);
                 const fingerboard = document.getElementById('fingerboard');
                 const fbRect = fingerboard.getBoundingClientRect();
                 const strRect = stringEl.getBoundingClientRect();
-                const percentage = note.semitones / 18; 
+                const percentage = note.semitones / 14; 
                 const x = (strRect.left + strRect.width/2) - fbRect.left;
                 let yPercent = percentage * 100;
                 if (note.semitones === 0) yPercent = 2; 
@@ -379,48 +507,61 @@
                 voices[note.string].play(ratio);
                 stringEl.classList.add('playing');
 
-                // Duration (500ms note)
+                // Wait for duration
                 await new Promise(r => setTimeout(r, 500));
+                if (sessionId !== activeSessionId) return; // Check again after wait
 
-                // Stop
+                // Stop note
                 voices[note.string].stop();
                 stringEl.classList.remove('playing');
                 
-                // Short Gap between notes
+                // Short Gap
                 await new Promise(r => setTimeout(r, 100));
             }
             
+            if (sessionId !== activeSessionId) return;
+
             tutorialMsg.innerText = "Now your turn!";
             tutorialDot.style.borderColor = '#4ade80'; // Back to Green
             isDemoPlaying = false;
 
             await new Promise(r => setTimeout(r, 1000));
+            if (sessionId !== activeSessionId) return;
             
             // Start Interactive Mode
             currentStep = 0;
             stepCompleted = false;
-            showStep();
+            showStep(sessionId);
         }
 
-        function startTutorial(data = twinkleData) {
+        function startTutorial(data) {
             if (!isAudioStarted) initAudio();
+            
+            // Stop any existing tutorial first
+            stopTutorial();
+            
+            // Start new session
+            activeSessionId++;
+            const thisSessionId = activeSessionId;
+
             currentSongData = data;
             tutorialActive = true;
             
-            // Reset previous states if any
-            isDemoPlaying = false;
-            
-            // Start with Demo
-            playDemo(data);
+            playDemo(data, thisSessionId);
         }
 
-        function showStep() {
+        function showStep(sessionId) {
+            // Safety check
+            if (sessionId !== undefined && sessionId !== activeSessionId) return;
+
             if (currentStep >= currentSongData.length) {
                 tutorialMsg.innerText = "Song Complete! Great job!";
                 tutorialDot.classList.add('hidden');
                 setTimeout(() => {
-                    tutorialActive = false;
-                    tutorialStatus.classList.add('hidden');
+                    // Only hide if we are still in the same session
+                    if (sessionId === undefined || sessionId === activeSessionId) {
+                        stopTutorial();
+                    }
                 }, 3000);
                 return;
             }
@@ -435,7 +576,7 @@
             const fbRect = fingerboard.getBoundingClientRect();
             const strRect = stringEl.getBoundingClientRect();
 
-            const percentage = note.semitones / 18; 
+            const percentage = note.semitones / 14; 
             const x = (strRect.left + strRect.width/2) - fbRect.left;
             let yPercent = percentage * 100;
             if (note.semitones === 0) yPercent = 2; 
@@ -462,9 +603,12 @@
                 tutorialDot.style.borderColor = "#fff";
                 
                 setTimeout(() => {
-                    currentStep++;
-                    tutorialMsg.style.color = ""; 
-                    showStep();
+                    // Verify session before advancing (though less critical here)
+                    if (tutorialActive) {
+                        currentStep++;
+                        tutorialMsg.style.color = ""; 
+                        showStep();
+                    }
                 }, 500); 
             }
         }
@@ -585,7 +729,7 @@
             if (relativeY < 15) return { ratio: 1.0, semitones: 0 };
             
             const percent = relativeY / height;
-            const semitones = percent * 18; 
+            const semitones = percent * 14; 
             return {
                 ratio: Math.pow(2, semitones / 12),
                 semitones: semitones
@@ -594,8 +738,7 @@
 
         function handleInput(e, stringEl, isStop = false) {
             if (!isAudioStarted) return;
-            // Do not trigger sounds if demo is playing
-            if (isDemoPlaying) return;
+            if (isDemoPlaying) return; // Block input during demo
 
             const stringId = stringEl.id;
             const baseFreq = parseFloat(stringEl.dataset.baseFreq);
@@ -633,8 +776,11 @@
         // --- Event Listeners ---
 
         document.getElementById('start-overlay').addEventListener('click', initAudio);
+        document.getElementById('stop-btn').addEventListener('click', stopTutorial);
         
         document.getElementById('play-twinkle').addEventListener('click', () => startTutorial(twinkleData));
+        document.getElementById('play-taqdeer').addEventListener('click', () => startTutorial(taqdeerData));
+        document.getElementById('play-manwa').addEventListener('click', () => startTutorial(manwaData));
 
         strings.forEach(str => {
             str.addEventListener('mousedown', (e) => {
