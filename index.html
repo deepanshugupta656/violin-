@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Violin with AI Maestro</title>
+    <title>Diya's Violin with AI Maestro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@400;700&display=swap');
@@ -91,7 +91,7 @@
 
     <!-- Start Overlay -->
     <div id="start-overlay" class="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center cursor-pointer transition-opacity duration-500">
-        <h1 class="font-['Cinzel'] text-5xl md:text-7xl text-amber-500 mb-4">Virtual Violin</h1>
+        <h1 class="font-['Cinzel'] text-5xl md:text-7xl text-amber-500 mb-4">Diya's Violin</h1>
         <p class="text-gray-300 text-xl mb-8 text-center px-4">Click or Tap anywhere to pick up the bow</p>
         <div class="animate-bounce text-amber-500 text-3xl">
             &#9660;
@@ -139,15 +139,17 @@
                     <span>&#9632;</span> Stop
                 </button>
                 
-                <button id="play-twinkle" class="bg-stone-800 hover:bg-stone-700 border border-stone-500 text-xs px-3 py-1 rounded text-white transition shadow-lg">
-                    Twinkle Twinkle
+                <button id="start-tutorial" class="bg-amber-700 hover:bg-amber-600 border border-amber-500 text-xs px-3 py-1 rounded text-white transition shadow-lg font-bold">
+                    Learn: Twinkle Twinkle
                 </button>
+                <!-- 
                 <button id="play-taqdeer" class="bg-stone-900 hover:bg-stone-800 border border-stone-500 text-xs px-3 py-1 rounded text-amber-500 transition shadow-lg font-bold">
                     Taqdeer Theme
                 </button>
                 <button id="play-manwa" class="bg-stone-900 hover:bg-stone-800 border border-stone-500 text-xs px-3 py-1 rounded text-rose-400 transition shadow-lg font-bold">
                     Manwa Laage
-                </button>
+                </button> 
+                -->
                 <button id="open-ai-modal" class="bg-gradient-to-r from-purple-900 to-indigo-900 hover:from-purple-800 hover:to-indigo-800 border border-purple-500 text-xs px-3 py-1 rounded text-white transition shadow-lg font-bold flex items-center gap-1">
                     Ask Maestro ✨
                 </button>
@@ -383,6 +385,7 @@
             { string: 'string-a', semitones: 2, name: "1st Finger A (B)" },
             { string: 'string-a', semitones: 2, name: "1st Finger A (B)" },
             { string: 'string-a', semitones: 0, name: "Open A" },
+            
             { string: 'string-d', semitones: 5, name: "3rd Finger D (G)" },
             { string: 'string-d', semitones: 5, name: "3rd Finger D (G)" },
             { string: 'string-d', semitones: 4, name: "2nd Finger D (F#)" },
@@ -392,6 +395,7 @@
             { string: 'string-d', semitones: 0, name: "Open D" }
         ];
 
+        /*
         const taqdeerData = [
             { string: 'string-d', semitones: 0, name: "Open D" },
             { string: 'string-d', semitones: 3, name: "Low 2nd Finger (F)" },
@@ -438,6 +442,7 @@
             { string: 'string-d', semitones: 5, name: "3rd Finger (G)" },
             { string: 'string-a', semitones: 0, name: "Open A" }
         ];
+        */
 
         let currentSongData = twinkleData;
         let tutorialActive = false;
@@ -778,9 +783,11 @@
         document.getElementById('start-overlay').addEventListener('click', initAudio);
         document.getElementById('stop-btn').addEventListener('click', stopTutorial);
         
-        document.getElementById('play-twinkle').addEventListener('click', () => startTutorial(twinkleData));
+        document.getElementById('start-tutorial').addEventListener('click', () => startTutorial(twinkleData));
+        /*
         document.getElementById('play-taqdeer').addEventListener('click', () => startTutorial(taqdeerData));
         document.getElementById('play-manwa').addEventListener('click', () => startTutorial(manwaData));
+        */
 
         strings.forEach(str => {
             str.addEventListener('mousedown', (e) => {
